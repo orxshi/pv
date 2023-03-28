@@ -1,0 +1,95 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{siunitx}
+
+\begin{document}
+
+    All processes below are for ideal gas.
+	
+		\section{Isothermal process}
+		
+		\begin{align*}
+			P\nu = RT\\
+			P = RT/\nu			
+		\end{align*}
+
+		\section{Isobaric process}
+		
+		\begin{align*}
+			P\nu = RT\\
+            \nu = RT/P
+		\end{align*}
+	
+		\section{Isentropic ideal gas}
+		
+		\subsection{Adiabatic + reversible = isentropic}
+		
+		Entropy balance equation:
+		
+		\begin{align*}
+			s_i - s_e + \int_1^2\frac{\delta q}{T} + s_\text{gen} = 0			
+		\end{align*}
+	
+		
+	
+		Adiabatic means $Q=0$ and reversible means $s_\text{gen}=0$. As a result,
+		\begin{align*}
+			s_i = s_e
+		\end{align*}
+	
+		Therefore, adiabatic and reversible process is isentropic process.
+		
+		\subsection{Isentropic process relations}
+	
+		\begin{align*}
+			\frac{T_1}{T_2} = \left(\frac{V_1}{V_2}\right)^{\gamma-1}
+		\end{align*}
+	
+		\begin{align*}
+			\frac{T_1}{T_2} = \left(\frac{P_1}{P_2}\right)^{(\gamma-1)/\gamma}
+		\end{align*}
+	
+		where, $\gamma$ is the ratio of specific heats. $\gamma=1.4$ for air.
+	
+		\section{Constant volume heat transfer}
+		
+		No work generated. Heat is converted into thermal energy.
+		 
+		\begin{align*}		
+			q = C_\nu(T_2 - T_1)
+		\end{align*}
+	
+		where, $C_\nu$ is specific heat at constant volume. $C_\nu = \SI{0.718}{\kilo\joule\per\kg\kelvin}$.
+		
+		\subsection{Temperature and entropy relation}
+	
+		This equations tells that finite difference in temperature results in heat transfer. Differentially,
+		\begin{align*}		
+			\delta q = C_\nu\text{d}T
+		\end{align*}
+		Divide both sides by temperature $T$,
+		\begin{align*}		
+			\delta q/T &= C_\nu\text{d}T/T\\
+			\text{d}s &= C_\nu\text{d}T/T
+		\end{align*}	
+		
+		Integrate
+		\begin{align*}		
+			s_2 - s_1 = C_\nu\ln\frac{T_2}{T_1}
+		\end{align*}
+		
+		For any $s$ and $T$, taking state 1 as reference,
+		
+		\begin{align*}		
+			s - s_1 = C_\nu\ln\frac{T}{T_1}\\
+			\exp(s - s_1) = \left(\frac{T}{T_1}\right)^{C_\nu}\\
+			T^{C_\nu} = T_1^{C_\nu}\exp(s - s_1)\\
+			T = T_1\exp(s - s_1)^{C_\nu}
+		\end{align*}
+	
+	
+	
+	
+	
+\end{document}
