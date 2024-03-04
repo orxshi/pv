@@ -101,7 +101,7 @@ void isochoric_compression(int k)
     }
 }
 
-void isentropic_full_compression(int k)
+double isentropic_full_compression(int k)
 {
     double incv = (VH - VL) / (nquad);
     double TI = TL * std::pow(VH/VL,(GM-1));
@@ -116,9 +116,11 @@ void isentropic_full_compression(int k)
 
         work += dw(j);
     }
+
+    return TI;
 }
 
-void isentropic_full_expansion(int k)
+void isentropic_full_expansion(int k, double TH)
 {
     double incv = (VH - VL) / (nquad);
     double TI = TH * std::pow(VH/VL,(GM-1));
@@ -369,9 +371,9 @@ void otto()
     // setting compression ratio and temperature range causes contradiction sometimes. If suitable parameters are found, in this case, Carnot fails. Failure happens this way: Max volume may be exceeded or max temperature may be exceeded.
     work = 0.;
 
-    isentropic_full_compression(0);
-    isochoric_heat_addition(1, T[nquad-1], 500);
-    isentropic_full_expansion(2);
+    double TI = isentropic_full_compression(0);
+    isochoric_heat_addition(1, T[nquad-1]);
+    isentropic_full_expansion(2, T[2*nquad-1]);
     isochoric_heat_rejection(3, T[3*nquad-1]);
 
     print("otto");
@@ -385,7 +387,7 @@ int main()
     stirling();
     carnot1();
     ericsson();
-    otto(); // plot otto. you will see that it gives wrong plot.
+    //otto(); // plot otto. you will see that it gives wrong plot.
 
     //https://www.quora.com/Why-do-we-add-heat-at-a-constant-pressure-in-a-gas-turbine-plant
     // https://en.wikipedia.org/wiki/Brayton_cycle
