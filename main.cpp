@@ -6,10 +6,12 @@
 
 //const int n = 120;
 const int n = 4320;
-const double GM = 1.4;
-const double cp = 1.004;
-const double R = 0.287;
+//const double cp = 1.004;
+const double cp = 1004;
+//const double R = 0.287;
+const double R = 287;
 const double cv = cp - R;
+const double GM = cp / cv;
 const double TL = 300;
 //double TH = 600;
 const double VL = 0.1;
@@ -38,6 +40,16 @@ double isentropic_V(double V1, double T1, double T2)
     return V1 * std::pow(T1 / T2, 1 / (GM-1));
 }
 
+double isentropic_T(double T1, double V1, double V2) 
+{
+    return T1 * std::pow(V1 / V2, GM-1);
+}
+
+double isentropic_PV(double V1, double P1, double P2) 
+{
+    return V1 * std::pow(P1 / P2, 1./GM);
+}
+
 //double dq(int j)
 //{
 //    if (j == 0)
@@ -57,6 +69,22 @@ void isobaric_heat_rejection(int k, double PC, double TH)
     {
         int j = i + k * nquad;
         T[j] = TH - i * inc;
+        P[j] = PC;
+        V[j] = m * R * T[j] / P[j];
+
+        work += dw(j);
+    }
+}
+
+void isobaric_heat_addition(int k, double PC, double T1, double T2)
+{
+    double inc = (T2 - T1) / (nquad+1);
+    assert(T2 > T1);
+
+    for (int i=0; i<nquad; ++i)
+    {
+        int j = i + k * nquad;
+        T[j] = T1 + i * inc;
         P[j] = PC;
         V[j] = m * R * T[j] / P[j];
 
@@ -127,7 +155,7 @@ double isentropic_full_compression(int k, double VH)
     return TI;
 }
 
-void isentropic_full_expansion(int k, double TH, double VH)
+double isentropic_full_expansion(int k, double TH, double VH)
 {
     double incv = (VH - VL) / (nquad);
     assert(incv > 0);
@@ -146,6 +174,8 @@ void isentropic_full_expansion(int k, double TH, double VH)
 
         work += dw(j);
     }
+
+    return TI;
 }
 
 //void isentropic_compression(int k, double TL, double TH)
@@ -184,6 +214,78 @@ double isentropic_compression(int k, double T1, double T2, double V2)
     }
 
     return V1;
+}
+
+double isentropic_expansion_PP(int k, double P1, double P2, double V2)
+{
+    // expansion from (P1, V1) to (P2, V2) where V2 > V1 and P1 > P2.
+
+    double V1 = isentropic_PV(V2, P2, P1);
+    double incp = (P1 - P2) / (nquad);
+    assert(incp > 0);
+
+    double incv = (V2 - V1) / (nquad);
+    assert(incv > 0);
+
+    for (int i=0; i<nquad; ++i)
+    {
+        int j = i + k * nquad;
+        V[j] = V1 + i * incv;
+        P[j] = P1 - i * incp;
+        T[j] = P[j] * V[j] / m / R;
+
+        work += dw(j);
+    }
+
+    return V2;
+}
+
+double isentropic_expansion_VV(int k, double V1, double V2, double T1)
+{
+    // expansion from (T1, V1) to (T2, V2) where V2 > V1 and T1 > T2.
+
+    double T2 = isentropic_T(T1, V1, V2);
+    double inct = (T1 - T2) / (nquad);
+    assert(inct > 0);
+
+    double incv = (V2 - V1) / (nquad);
+    assert(incv > 0);
+
+    for (int i=0; i<nquad; ++i)
+    {
+        int j = i + k * nquad;
+        V[j] = V1 + i * incv;
+        T[j] = T1 - i * inct;
+        P[j] = m * R * T[j] / V[j];
+
+        work += dw(j);
+    }
+
+    return V2;
+}
+
+double isentropic_expansion_VV_low(int k, double V1, double V2, double T2)
+{
+    // expansion from (T1, V1) to (T2, V2) where V2 > V1 and T1 > T2.
+
+    double incv = (V2 - V1) / (nquad);
+    assert(incv > 0);
+
+    double T1 = isentropic_T(T2, V2, V1);
+    double inct = (T1 - T2) / (nquad);
+    assert(inct > 0);
+
+    for (int i=0; i<nquad; ++i)
+    {
+        int j = i + k * nquad;
+        V[j] = V1 + i * incv;
+        T[j] = T1 - i * inct;
+        P[j] = m * R * T[j] / V[j];
+
+        work += dw(j);
+    }
+
+    return V2;
 }
 
 double isentropic_expansion_low(int k, double T1, double T2, double V1)
@@ -457,6 +559,106 @@ void otto(double cr, double TH)
     std::cout << "net work from otto: " << work << std::endl;
 }
 
+
+void otto_cr_QR(double cr, double QR)
+{
+    // otto cycle with compression ratio and heat addition.
+    
+    work = 0.;
+
+    double VH = cr * VL;
+    double T2 = isentropic_full_compression(0, VH);
+    std::cout << "work: " << work << std::endl;
+    double T4 = TL + QR / m / cv;
+    isochoric_heat_rejection(3, T4, VH);
+    std::cout << "work: " << work << std::endl;
+    isentropic_expansion_VV_low(2, VL, VH, T4);
+    std::cout << "work: " << work << std::endl;
+    double T3 = T[nquad*2+1];
+    isochoric_heat_addition_TH(1, T2, T3);
+    std::cout << "work: " << work << std::endl;
+    double QS = (T3 - T2) * m * cv;
+    std::cout << "QRc: " << (T4 - TL) * m * cv << std::endl;
+    std::cout << "QS: " << QS << std::endl;
+
+    std::cout << "QS - QR: " << QS - QR << std::endl;
+
+    std::cout << "T4 - TL: " << T4 - TL << std::endl;
+    std::cout << "T3 - T2: " << T3 - T2 << std::endl;
+    std::cout << "T3: " << T3 << std::endl;
+    std::cout << "T4: " << T4 << std::endl;
+    
+    print("otto");
+
+    std::cout << "work_otto: " << work << std::endl;
+    std::cout << "eta_otto: " << work / QS << std::endl;
+}
+
+void diesel_cr_QR(double cr, double QR)
+{
+    // diesel cycle with compression ratio and heat addition.
+    
+    work = 0.;
+
+    double VH = cr * VL;
+    double T2 = isentropic_full_compression(0, VH);
+    double P2 = P[nquad*1-1];
+    double P3 = P2;
+    double T4 = TL + QR / m / cv;
+    double P4 = m * R * T4 / VH;
+    isochoric_heat_rejection(3, T4, VH);
+    isentropic_expansion_PP(2, P3, P4, VH);
+    double V3 = V[nquad*2];
+    double T3 = P3 * V3 / m / R;
+    isobaric_heat_addition(1, P2, T2, T3);
+    double QS = (T3 - T2) * m * cp;
+
+    print("diesel");
+
+    std::cout << "work_diesel: " << work << std::endl;
+    std::cout << "eta_diesel: " << work / QS << std::endl;
+}
+
+
+
+void otto_cr_QH(double cr, double QS)
+{
+    // otto cycle with compression ratio and heat addition.
+    
+    work = 0.;
+
+    double VH = cr * VL;
+    double T2 = isentropic_full_compression(0, VH);
+    double T3 = T2 + QS / m / cv;
+    isochoric_heat_addition_TH(1, T2, T3);
+    double T4 = isentropic_full_expansion(2, T3, VH);
+    isochoric_heat_rejection(3, T4, VH);
+
+    print("otto");
+
+    std::cout << "work_otto: " << work << std::endl;
+    std::cout << "eta_otto: " << work / QS << std::endl;
+}
+
+void diesel_cr_QH(double cr, double QS)
+{
+    // otto cycle with compression ratio and heat addition.
+    
+    work = 0.;
+
+    double VH = cr * VL;
+    double T2 = isentropic_full_compression(0, VH);
+    double T3 = T2 + QS / m / cp;
+    isobaric_heat_addition(1, P[nquad*1-1], T2, T3);
+    isentropic_expansion_VV(2, V[nquad*2-1], VH, T[nquad*2-1]);
+    isochoric_heat_rejection(3, T[nquad*3-1], VH);
+
+    print("diesel");
+
+    std::cout << "work_diesel: " << work << std::endl;
+    std::cout << "eta_diesel: " << work / QS << std::endl;
+}
+
 void otto_TH_QR(double TH, double QR)
 {
     // otto cycle with given max temperature and heat rejection.
@@ -473,13 +675,12 @@ void otto_TH_QR(double TH, double QR)
 
     print("otto");
 
-    std::cout << "net work from otto: " << work << std::endl;
+    std::cout << "work_otto: " << work << std::endl;
 }
 
 void diesel_TH_QR(double TH, double QR)
 {
     // diesel cycle with given max temperature and heat rejection.
-    // Just Tmax and QR seems like not enough.
     
     work = 0.;
 
@@ -510,7 +711,29 @@ int main()
     //carnot1(6, 600);
     //ericsson(6, 600);
     //otto_TH_QR(1000, 300);
-    diesel_TH_QR(600, 10);
+    //diesel_TH_QR(600, 10);
+
+    // Same compression ratio and heat addition
+    //otto_cr_QH(6, 500);
+    //diesel_cr_QH(6, 500);
+
+    // Same compression ratio and heat rejection
+    otto_cr_QR(6, 500);
+    //diesel_cr_QR(6, 500);
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     //https://www.quora.com/Why-do-we-add-heat-at-a-constant-pressure-in-a-gas-turbine-plant
     // https://en.wikipedia.org/wiki/Brayton_cycle
