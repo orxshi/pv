@@ -4,26 +4,28 @@
 #include <string>
 #include <cassert>
 
-//const int n = 120;
 const int n = 4320;
-//const double cp = 1.004;
 const double cp = 1004;
-//const double R = 0.287;
 const double R = 287;
 const double cv = cp - R;
 const double GM = cp / cv;
 const double TL = 300;
-//double TH = 600;
 const double VL = 0.1;
-//const double cr = 6; // compression ratio
-//const double VH = cr * VL;
+const double sL = 0;
 const double m = 1;
         
 double P[n];
 double V[n];
 double T[n];
+double s[n];
 
 int nquad = n / 4;
+
+double ds(double T, double V, double Tref, double Vref)
+{
+    //return sL + cv * std::log(T/TL) + R * std::log(V/VH);
+    return sL + cv * std::log(T/Tref) + R * std::log(V/Vref);
+}
 
 double dw(int j)
 {
@@ -62,7 +64,7 @@ double isentropic_PV(double V1, double P1, double P2)
 
 double work = 0.;
 
-void isobaric_heat_rejection(int k, double PC, double TH)
+void isobaric_heat_rejection(int k, double PC, double TH, double VH)
 {
     double inc = (TH - TL) / (nquad+1);
     for (int i=0; i<nquad; ++i)
@@ -71,12 +73,13 @@ void isobaric_heat_rejection(int k, double PC, double TH)
         T[j] = TH - i * inc;
         P[j] = PC;
         V[j] = m * R * T[j] / P[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
 }
 
-void isobaric_heat_addition(int k, double PC, double T1, double T2)
+void isobaric_heat_addition(int k, double PC, double T1, double T2, double VH)
 {
     double inc = (T2 - T1) / (nquad+1);
     assert(T2 > T1);
@@ -87,12 +90,13 @@ void isobaric_heat_addition(int k, double PC, double T1, double T2)
         T[j] = T1 + i * inc;
         P[j] = PC;
         V[j] = m * R * T[j] / P[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
 }
 
-void isobaric_heat_addition(int k, double PC, double TH)
+void isobaric_heat_addition(int k, double PC, double TH, double VH)
 {
     double inc = (TH - TL) / (nquad+1);
     for (int i=0; i<nquad; ++i)
@@ -101,12 +105,13 @@ void isobaric_heat_addition(int k, double PC, double TH)
         T[j] = TL + i * inc;
         P[j] = PC;
         V[j] = m * R * T[j] / P[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
 }
 
-void isothermal_heat_rejection(int k, double Vmin, double Vmax)
+void isothermal_heat_rejection(int k, double Vmin, double Vmax, double VH)
 {
     double inc = (Vmax - Vmin) / (nquad+1);
     assert(inc > 0);
@@ -117,6 +122,7 @@ void isothermal_heat_rejection(int k, double Vmin, double Vmax)
         V[j] = Vmax - i * inc;
         T[j] = TL;
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -124,7 +130,7 @@ void isothermal_heat_rejection(int k, double Vmin, double Vmax)
     //work += m * R * TL * std::log(VI/VH);
 }
 
-void isochoric_compression(int k, double TH)
+void isochoric_compression(int k, double TH, double VH)
 {
     double inc = (TH - TL) / (nquad);
     for (int i=0; i<nquad; ++i)
@@ -133,6 +139,7 @@ void isochoric_compression(int k, double TH)
         V[j] = VL;
         T[j] = TL + i * inc;
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
     }
 }
 
@@ -140,14 +147,17 @@ double isentropic_full_compression(int k, double VH)
 {
     double incv = (VH - VL) / (nquad);
     double TI = TL * std::pow(VH/VL,(GM-1));
-    double inct = (TI - TL) / (nquad);
+    //double inct = (TI - TL) / (nquad);
 
     for (int i=0; i<nquad; ++i)
     {
         int j = i + k * nquad;
         V[j] = VH - i * incv;
-        T[j] = TL + i * inct;
+	T[j] = TL * std::pow(VH/V[j],(GM-1));
+        //T[j] = TL + i * inct;
         P[j] = m * R * T[j] / V[j];
+        //s[j] = sC;
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -159,9 +169,7 @@ double isentropic_full_expansion(int k, double TH, double VH)
 {
     double incv = (VH - VL) / (nquad);
     assert(incv > 0);
-    //double TI = TH * std::pow(VH/VL,(GM-1));
     double TI = TH * std::pow(VL/VH,(GM-1));
-    std::cout << TI << std::endl;
     double inct = (TH - TI) / (nquad);
     assert(inct > 0);
 
@@ -169,8 +177,10 @@ double isentropic_full_expansion(int k, double TH, double VH)
     {
         int j = i + k * nquad;
         V[j] = VL + i * incv;
-        T[j] = TH - i * inct;
+	T[j] = TH * std::pow(VL/V[j],(GM-1));
+        //T[j] = TH - i * inct;
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -207,8 +217,10 @@ double isentropic_compression(int k, double T1, double T2, double V2)
     {
         int j = i + k * nquad;
         V[j] = V1 - i * incv;
-        T[j] = T1 + i * inct;
+        //T[j] = T1 + i * inct;
+	V[j] = isentropic_V(V2, T2, T[j]);
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, V1);
 
         work += dw(j);
     }
@@ -216,7 +228,7 @@ double isentropic_compression(int k, double T1, double T2, double V2)
     return V1;
 }
 
-double isentropic_expansion_PP(int k, double P1, double P2, double V2)
+double isentropic_expansion_PP(int k, double P1, double P2, double V2, double VH)
 {
     // expansion from (P1, V1) to (P2, V2) where V2 > V1 and P1 > P2.
 
@@ -230,9 +242,11 @@ double isentropic_expansion_PP(int k, double P1, double P2, double V2)
     for (int i=0; i<nquad; ++i)
     {
         int j = i + k * nquad;
-        V[j] = V1 + i * incv;
+        //V[j] = V1 + i * incv;
         P[j] = P1 - i * incp;
+	V[j] = isentropic_PV(V2, P2, P[j]);
         T[j] = P[j] * V[j] / m / R;
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -240,7 +254,7 @@ double isentropic_expansion_PP(int k, double P1, double P2, double V2)
     return V2;
 }
 
-double isentropic_expansion_VV(int k, double V1, double V2, double T1)
+double isentropic_expansion_VV(int k, double V1, double V2, double T1, double VH)
 {
     // expansion from (T1, V1) to (T2, V2) where V2 > V1 and T1 > T2.
 
@@ -255,8 +269,10 @@ double isentropic_expansion_VV(int k, double V1, double V2, double T1)
     {
         int j = i + k * nquad;
         V[j] = V1 + i * incv;
-        T[j] = T1 - i * inct;
+        //T[j] = T1 - i * inct;
+	T[j] = isentropic_T(T1, V1, V[j]);
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -264,7 +280,7 @@ double isentropic_expansion_VV(int k, double V1, double V2, double T1)
     return V2;
 }
 
-double isentropic_expansion_VV_low(int k, double V1, double V2, double T2)
+double isentropic_expansion_VV_low(int k, double V1, double V2, double T2, double VH)
 {
     // expansion from (T1, V1) to (T2, V2) where V2 > V1 and T1 > T2.
 
@@ -279,8 +295,10 @@ double isentropic_expansion_VV_low(int k, double V1, double V2, double T2)
     {
         int j = i + k * nquad;
         V[j] = V1 + i * incv;
-        T[j] = T1 - i * inct;
+        //T[j] = T1 - i * inct;
+	T[j] = isentropic_T(T2, V2, V[j]);
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -288,7 +306,7 @@ double isentropic_expansion_VV_low(int k, double V1, double V2, double T2)
     return V2;
 }
 
-double isentropic_expansion_low(int k, double T1, double T2, double V1)
+double isentropic_expansion_low(int k, double T1, double T2, double V1, double VH)
 {
     // expansion from (T1, V1) to (T2, V2) where V2 > V1 and T1 > T2.
 
@@ -300,9 +318,11 @@ double isentropic_expansion_low(int k, double T1, double T2, double V1)
     for (int i=0; i<nquad; ++i)
     {
         int j = i + k * nquad;
-        V[j] = V1 + i * incv;
+        //V[j] = V1 + i * incv;
         T[j] = T1 - i * inct;
+	V[j] = isentropic_V(V1, T1, T[j]);
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -310,7 +330,7 @@ double isentropic_expansion_low(int k, double T1, double T2, double V1)
     return V2;
 }
 
-double isentropic_expansion_high(int k, double T1, double T2, double V2)
+double isentropic_expansion_high(int k, double T1, double T2, double V2, double VH)
 {
     // expansion from (T1, V1) to (T2, V2) where V2 > V1 and T1 > T2.
 
@@ -322,9 +342,11 @@ double isentropic_expansion_high(int k, double T1, double T2, double V2)
     for (int i=0; i<nquad; ++i)
     {
         int j = i + k * nquad;
-        V[j] = V1 + i * incv;
+        //V[j] = V1 + i * incv;
         T[j] = T1 - i * inct;
+	V[j] = isentropic_V(V2, T2, T[j]);
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -369,7 +391,7 @@ double isentropic_expansion_high(int k, double T1, double T2, double V2)
 //    }
 //}
 
-void isothermal_heat_addition(int k, double Vmin, double Vmax, double TH)
+void isothermal_heat_addition(int k, double Vmin, double Vmax, double TH, double VH)
 {
     double inc = (Vmax - Vmin) / (nquad);
 
@@ -380,6 +402,7 @@ void isothermal_heat_addition(int k, double Vmin, double Vmax, double TH)
         V[j] = Vmin + i * inc;
         T[j] = TH;
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
 
         work += dw(j);
     }
@@ -394,10 +417,11 @@ void isochoric_expansion(int k, double TH, double VH)
         V[j] = VH;
         T[j] = TH - i * inc;
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
     }
 }
 
-void isochoric_heat_addition_QH(int k, double TI, double QH)
+void isochoric_heat_addition_QH(int k, double TI, double QH, double VH)
 {
     double TH_real = TI + QH / m / cv;
     double inc = (TH_real - TI) / (nquad);
@@ -408,10 +432,11 @@ void isochoric_heat_addition_QH(int k, double TI, double QH)
         V[j] = VL;
         T[j] = TI + i * inc;
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
     }
 }
 
-void isochoric_heat_addition_TH(int k, double TI, double TH)
+void isochoric_heat_addition_TH(int k, double TI, double TH, double sI, double VH)
 {
     double inc = (TH - TI) / (nquad);
     assert(inc > 0);
@@ -421,6 +446,7 @@ void isochoric_heat_addition_TH(int k, double TI, double TH)
         V[j] = VL;
         T[j] = TI + i * inc;
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
     }
 }
 
@@ -433,6 +459,7 @@ void isochoric_heat_rejection(int k, double TI, double VH)
         V[j] = VH;
         T[j] = TI - i * inc;
         P[j] = m * R * T[j] / V[j];
+	s[j] = ds(T[j], V[j], TL, VH);
     }
 }
 
@@ -450,6 +477,8 @@ void print(std::string filename)
         out << V[i];
         out << " ";
         out << T[i];
+        out << " ";
+        out << s[i];
         out << std::endl;
     }
 
@@ -462,9 +491,9 @@ void stirling(double cr, double TH)
 
     double VH = cr * VL;
 
-    isothermal_heat_rejection(0, VL, VH);
-    isochoric_compression(1, TH);
-    isothermal_heat_addition(2, VL, VH, TH);
+    isothermal_heat_rejection(0, VL, VH, VH);
+    isochoric_compression(1, TH, VH);
+    isothermal_heat_addition(2, VL, VH, TH, VH);
     isochoric_expansion(3, TH, VH);
 
     print("stirling");
@@ -479,9 +508,9 @@ void carnot1(double cr, double TH)
     double VH = cr * VL;
 
     double V2 = isentropic_compression(0, TL, TH, VL);
-    isothermal_heat_rejection(3, V2, VH);
-    double V4 = isentropic_expansion_high(2, TH, TL, VH);
-    isothermal_heat_addition(1, VL, V4, TH);
+    isothermal_heat_rejection(3, V2, VH, VH);
+    double V4 = isentropic_expansion_high(2, TH, TL, VH, VH);
+    isothermal_heat_addition(1, VL, V4, TH, VH);
 
     print("carnot");
 
@@ -512,10 +541,10 @@ void ericsson(double cr, double TH)
     double PL = m * R * TH / VH; // 4
     double PH = m * R * TL / VL; // 2
 
-    isobaric_heat_rejection(0, PL, TH);
-    isothermal_heat_rejection(1, VL, V[nquad*1-1]);
-    isobaric_heat_addition(2, PH, TH);
-    isothermal_heat_addition(3, V[nquad*3-1], VH, TH);
+    isobaric_heat_rejection(0, PL, TH, VH);
+    isothermal_heat_rejection(1, VL, V[nquad*1-1], VH);
+    isobaric_heat_addition(2, PH, TH, VH);
+    isothermal_heat_addition(3, V[nquad*3-1], VH, TH, VH);
 
     print("ericsson");
 
@@ -550,7 +579,7 @@ void otto(double cr, double TH)
     double VH = cr * VL;
 
     double TI = isentropic_full_compression(0, VH);
-    isochoric_heat_addition_TH(1, T[nquad-1], TH);
+    isochoric_heat_addition_TH(1, T[nquad-1], TH, sL, VH);
     isentropic_full_expansion(2, T[2*nquad-1], VH);
     isochoric_heat_rejection(3, T[3*nquad-1], VH);
 
@@ -572,10 +601,10 @@ void otto_cr_QR(double cr, double QR)
     double T4 = TL + QR / m / cv;
     isochoric_heat_rejection(3, T4, VH);
     std::cout << "work: " << work << std::endl;
-    isentropic_expansion_VV_low(2, VL, VH, T4);
+    isentropic_expansion_VV_low(2, VL, VH, T4, VH);
     std::cout << "work: " << work << std::endl;
     double T3 = T[nquad*2+1];
-    isochoric_heat_addition_TH(1, T2, T3);
+    isochoric_heat_addition_TH(1, T2, T3, sL, VH);
     std::cout << "work: " << work << std::endl;
     double QS = (T3 - T2) * m * cv;
     std::cout << "QRc: " << (T4 - TL) * m * cv << std::endl;
@@ -587,6 +616,8 @@ void otto_cr_QR(double cr, double QR)
     std::cout << "T3 - T2: " << T3 - T2 << std::endl;
     std::cout << "T3: " << T3 << std::endl;
     std::cout << "T4: " << T4 << std::endl;
+    std::cout << "T1: " << TL << std::endl;
+    std::cout << "T2: " << T2 << std::endl;
     
     print("otto");
 
@@ -607,10 +638,10 @@ void diesel_cr_QR(double cr, double QR)
     double T4 = TL + QR / m / cv;
     double P4 = m * R * T4 / VH;
     isochoric_heat_rejection(3, T4, VH);
-    isentropic_expansion_PP(2, P3, P4, VH);
+    isentropic_expansion_PP(2, P3, P4, VH, VH);
     double V3 = V[nquad*2];
     double T3 = P3 * V3 / m / R;
-    isobaric_heat_addition(1, P2, T2, T3);
+    isobaric_heat_addition(1, P2, T2, T3, VH);
     double QS = (T3 - T2) * m * cp;
 
     print("diesel");
@@ -630,9 +661,14 @@ void otto_cr_QH(double cr, double QS)
     double VH = cr * VL;
     double T2 = isentropic_full_compression(0, VH);
     double T3 = T2 + QS / m / cv;
-    isochoric_heat_addition_TH(1, T2, T3);
+    isochoric_heat_addition_TH(1, T2, T3, sL, VH);
     double T4 = isentropic_full_expansion(2, T3, VH);
     isochoric_heat_rejection(3, T4, VH);
+
+    double QR = (T4 - TL) * m * cv;
+    std::cout << "QS: " << QS << std::endl;
+    std::cout << "QR: " << QR << std::endl;
+    std::cout << "QS - QR: " << QS - QR << std::endl;
 
     print("otto");
 
@@ -642,15 +678,15 @@ void otto_cr_QH(double cr, double QS)
 
 void diesel_cr_QH(double cr, double QS)
 {
-    // otto cycle with compression ratio and heat addition.
+    // diesel cycle with compression ratio and heat addition.
     
     work = 0.;
 
     double VH = cr * VL;
     double T2 = isentropic_full_compression(0, VH);
     double T3 = T2 + QS / m / cp;
-    isobaric_heat_addition(1, P[nquad*1-1], T2, T3);
-    isentropic_expansion_VV(2, V[nquad*2-1], VH, T[nquad*2-1]);
+    isobaric_heat_addition(1, P[nquad*1-1], T2, T3, VH);
+    isentropic_expansion_VV(2, V[nquad*2-1], VH, T[nquad*2-1], VH);
     isochoric_heat_rejection(3, T[nquad*3-1], VH);
 
     print("diesel");
@@ -671,38 +707,34 @@ void otto_TH_QR(double TH, double QR)
     isentropic_full_expansion(0, TH, VH);
     isochoric_heat_rejection(1, T4, VH);
     double T2 = isentropic_full_compression(2, VH);
-    isochoric_heat_addition_TH(3, T2, TH);
+    isochoric_heat_addition_TH(3, T2, TH, sL, VH);
 
     print("otto");
 
     std::cout << "work_otto: " << work << std::endl;
 }
 
-void diesel_TH_QR(double TH, double QR)
-{
-    // diesel cycle with given max temperature and heat rejection.
-    
-    work = 0.;
-
-    double T4 = TL + QR / m / cv;
-    std::cout << "T4: " << T4 << std::endl;
-    double V3 = VL * std::pow(TH / T4, 1. / (GM-1)); // wrong. not VL bu VH and I dont know VH!
-    std::cout << "V3: " << V3 << std::endl;
-    double P3 = m * R * TH / V3;
-    std::cout << "P3: " << P3 << std::endl;
-    double P2 = P3;
-    double T2 = P2 * VL / m / R;
-    std::cout << "T2: " << T2 << std::endl;
-
-    isentropic_compression(0, TL, T2, VL);
-    isobaric_heat_addition(1, P2, TH);
-    double V4 = isentropic_expansion_low(2, TH, T4, V3);
-    isochoric_heat_rejection(4, T4, V4);
-
-    print("diesel");
-
-    std::cout << "net work from diesel: " << work << std::endl;
-}
+//void diesel_TH_QR(double TH, double QR)
+//{
+//    // diesel cycle with given max temperature and heat rejection.
+//    
+//    work = 0.;
+//
+//    double T4 = TL + QR / m / cv;
+//    double V3 = VL * std::pow(TH / T4, 1. / (GM-1)); // wrong. not VL bu VH and I dont know VH!
+//    double P3 = m * R * TH / V3;
+//    double P2 = P3;
+//    double T2 = P2 * VL / m / R;
+//
+//    isentropic_compression(0, TL, T2, VL);
+//    isobaric_heat_addition(1, P2, TH, VH);
+//    double V4 = isentropic_expansion_low(2, TH, T4, V3, VH);
+//    isochoric_heat_rejection(4, T4, V4);
+//
+//    print("diesel");
+//
+//    std::cout << "net work from diesel: " << work << std::endl;
+//}
 
 
 int main()
@@ -714,12 +746,12 @@ int main()
     //diesel_TH_QR(600, 10);
 
     // Same compression ratio and heat addition
-    //otto_cr_QH(6, 500);
-    //diesel_cr_QH(6, 500);
+    otto_cr_QH(6, 500000);
+    //diesel_cr_QH(6, 500000);
 
     // Same compression ratio and heat rejection
-    otto_cr_QR(6, 500);
-    //diesel_cr_QR(6, 500);
+    //otto_cr_QR(6, 500000);
+    //diesel_cr_QR(6, 500000);
     
 
 
